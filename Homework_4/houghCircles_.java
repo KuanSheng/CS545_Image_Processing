@@ -1,38 +1,30 @@
-
-
 import ij.*;
 import ij.plugin.filter.PlugInFilter;
 import ij.process.*;
 import java.awt.*;
 import ij.gui.*;
 
-/**
-*   This ImageJ plugin shows the Hough Transform Space and search for
-*   circles in a binary image. The image must have been passed through
-*   an edge detection module and have edges marked in white (background
-*   must be in black).
-*/
+
 public class Circular_Hough implements PlugInFilter {
 
-    public int radiusMin;  // Find circles with radius grater or equal radiusMin
-    public int radiusMax;  // Find circles with radius less or equal radiusMax
-    public int radiusInc;  // Increment used to go from radiusMin to radiusMax
-    public int maxCircles; // Numbers of circles to be found
-    public int threshold = -1; // An alternative to maxCircles. All circles with
-    // a value in the hough space greater then threshold are marked. Higher thresholds
-    // results in fewer circles.
-    byte imageValues[]; // Raw image (returned by ip.getPixels())
-    double houghValues[][][]; // Hough Space Values
+    public int radiusMin;  
+    public int radiusMax;  
+    public int radiusInc; 
+    public int maxCircles; 
+    public int threshold = -1;
+    byte imageValues[]; 
+    double houghValues[][][]; 
     public int width; // Hough Space width (depends on image width)
     public int height;  // Hough Space heigh (depends on image height)
     public int depth;  // Hough Space depth (depends on radius interval)
     public int offset; // Image Width
     public int offx;   // ROI x offset
     public int offy;   // ROI y offset
-    Point centerPoint[]; // Center Points of the Circles Found.
+    Point centerPoint[];
+    double radius[] = new double[100];
     private int vectorMaxSize = 500;
     boolean useThreshold = false;
-    int lut[][][]; // LookUp Table for rsin e rcos values
+    int lut[][][];
 
 
     public int setup(String arg, ImagePlus imp) {
@@ -40,7 +32,7 @@ public class Circular_Hough implements PlugInFilter {
             showAbout();
             return DONE;
         }
-        return DOES_8G+DOES_STACKS+SUPPORTS_MASKING;
+        return DOES_ALL;
     }
 
     public void run(ImageProcessor ip) {
@@ -56,16 +48,15 @@ public class Circular_Hough implements PlugInFilter {
         offset = ip.getWidth();
 
 
-        if( readParameters() ) { // Show a Dialog Window for user input of
-            // radius and maxCircles.
+        if( readParameters() ) { 
 
 
             houghTransform();
 
-            // Create image View for Hough Transform.
-            ImageProcessor newip = new ByteProcessor(width, height);
+           
+           /* ImageProcessor newip = new ByteProcessor(width, height);
             byte[] newpixels = (byte[])newip.getPixels();
-            createHoughPixels(newpixels);
+            createHoughPixels(newpixels);*/
 
             // Create image View for Marked Circles.
             ImageProcessor circlesip = new ByteProcessor(width, height);
@@ -76,9 +67,9 @@ public class Circular_Hough implements PlugInFilter {
                 getCenterPointsByThreshold(threshold);
             else
                 getCenterPoints(maxCircles);
-            drawCircles(circlespixels);
+            drawCircles(circlespixels,ip);
 
-            new ImagePlus("Hough Space [r="+radiusMin+"]", newip).show(); // Shows only the hough space for the minimun radius
+            //new ImagePlus("Hough Space [r="+radiusMin+"]", newip).show(); // Shows only the hough space for the minimun radius
             new ImagePlus(maxCircles+" Circles Found", circlesip).show();
         }
     }
@@ -97,12 +88,12 @@ public class Circular_Hough implements PlugInFilter {
 
         GenericDialog gd = new GenericDialog("Hough Parameters", IJ.getInstance());
         gd.addNumericField("Minimum radius (in pixels) :", 10, 0);
-        gd.addNumericField("Maximum radius (in pixels)", 20, 0);
+        gd.addNumericField("Maximum radius (in pixels)", 250, 0);
         gd.addNumericField("Increment radius (in pixels) :", 2, 0);
-        gd.addNumericField("Number of Circles (NC): (enter 0 if using threshold)", 10, 0);
+        gd.addNumericField("Number of Circles (NC): (enter 0 if using threshold)", 5, 0);
         gd.addNumericField("Threshold: (not used if NC > 0)", 60, 0);
 
-        gd.showDialog();
+      //  gd.showDialog();
 
         if (gd.wasCanceled()) {
             return(false);
@@ -128,22 +119,7 @@ public class Circular_Hough implements PlugInFilter {
 
     }
 
-    /** The parametric equation for a circle centered at (a,b) with
-        radius r is:
-
-    a = x - r*cos(theta)
-    b = y - r*sin(theta)
-
-    In order to speed calculations, we first construct a lookup
-    table (lut) containing the rcos(theta) and rsin(theta) values, for
-    theta varying from 0 to 2*PI with increments equal to
-    1/8*r. As of now, a fixed increment is being used for all
-    different radius (1/8*radiusMin). This should be corrected in
-    the future.
-
-    Return value = Number of angles for each radius
-       
-    */
+   
     private int buildLookUpTable() {
 
         int i = 0;
@@ -221,8 +197,8 @@ public class Circular_Hough implements PlugInFilter {
     }
 
 	// Draw the circles found in the original image.
-	public void drawCircles(byte[] circlespixels) {
-		
+	public void drawCircles(byte[] circlespixels, ImageProcessor ip) {
+
 		// Copy original input pixels into output
 		// circle location display image and
 		// combine with saturation at 100
@@ -239,17 +215,7 @@ public class Circular_Hough implements PlugInFilter {
 				roiaddr++;
 			}
 		}
-		// Copy original image to the circlespixels image.
-		// Changing pixels values to 100, so that the marked
-		// circles appears more clear. Must be improved in
-		// the future to show the resuls in a colored image.
-		//for(int i = 0; i < width*height ;++i ) {
-		//if(imageValues[i] != 0 )
-		//if(circlespixels[i] != 0 )
-		//circlespixels[i] = 100;
-		//else
-		//circlespixels[i] = 0;
-		//}
+		
 		if(centerPoint == null) {
 			if(useThreshold)
 				getCenterPointsByThreshold(threshold);
@@ -261,10 +227,11 @@ public class Circular_Hough implements PlugInFilter {
 		int offset = width;
 		int offx=0;
 		int offy=0;
-		
+
 		for(int l = 0; l < maxCircles; l++) {
 			int i = centerPoint[l].x;
 			int j = centerPoint[l].y;
+			double r = radius[l];
 			// Draw a gray cross marking the center of each circle.
 			for( int k = -10 ; k <= 10 ; ++k ) {
 				int p = (j+k+offy)*offset + (i+offx);
@@ -283,6 +250,7 @@ public class Circular_Hough implements PlugInFilter {
 				if(!outOfBounds(j+k+offy,i+2+offx))
 					circlespixels[(j+k+offy)*offset + (i+2+offx)] = cor;
 			}
+			drawCircle(ip ,  i, j, r);
 		}
 	}
 
@@ -339,16 +307,13 @@ public class Circular_Hough implements PlugInFilter {
             }
 
             centerPoint[c] = new Point (xMax, yMax);
-
+            radius[c] = rMax;
             clearNeighbours(xMax,yMax,rMax);
         }
     }
 
 
-    /** Search circles having values in the hough space higher than a threshold
-
-    @param threshold The threshold used to select the higher point of Hough Space
-    */
+   
     private void getCenterPointsByThreshold (int threshold) {
 
         centerPoint = new Point[vectorMaxSize];
@@ -386,10 +351,33 @@ public class Circular_Hough implements PlugInFilter {
 
     /** Clear, from the Hough Space, all the counter that are near (radius/2) a previously found circle C.
         
-    @param x The x coordinate of the circle C found.
-    @param x The y coordinate of the circle C found.
-    @param x The radius of the circle C found.
+    
     */
+    private void drawCircle(ImageProcessor ip, double x, double y, double r){
+    	ip.setLineWidth(2);
+    	ip.setColor(250);
+    	
+    	int n = 400;
+    	double dtheta = (Math.PI * 2)/n;
+    	
+    	int ix = (int)Math.round(x+r);
+    	int iy = (int)Math.round(y);
+    	
+    	ip.moveTo(ix,iy);
+    	
+    	for(int i = 1;i<=n;i++){
+    		double theta = i*dtheta;
+    		double x0 = x+r * Math.cos(theta);
+    		double y0 = y+r * Math.sin(theta);
+    		
+    		ix = (int)Math.round(x0);
+    		iy = (int)Math.round(y0);
+    		
+    		ip.lineTo(ix,iy);
+    		
+    	}
+    	
+    }
     private void clearNeighbours(int x,int y, int radius) {
 
 
@@ -432,4 +420,3 @@ public class Circular_Hough implements PlugInFilter {
     }
 
 }
-
